@@ -1,0 +1,46 @@
+port = "8080"
+
+[twilio]
+account_sid = "${TWILIO_ACCOUNT_SID}"
+auth_token = "${TWILIO_AUTH_TOKEN}"
+from_number = "${TWILIO_FROM_NUMBER}"
+model = "sms"
+
+[sms]
+url = "${SMS_MODEL_URL}"
+api_key = ""
+
+max_tokens = 512
+temperature = 0.9
+
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+top_a = 0.0
+typical_p = 1.0
+tfs = 1.0
+
+repetition_penalty = 1.0
+repetition_penalty_range = 0
+presence_penalty = 0.0
+frequency_penalty = 0.0
+
+mirostat_mode = 0
+mirostat_tau = 5.0
+mirostat_eta = 0.1
+
+dry_multiplier = 0.0
+dry_base = 1.75
+dry_allowed_length = 2
+dry_sequence_breakers = ["\n", ":", "\"", "*"]
+
+smoothing_factor = 0.0
+epsilon_cutoff = 0.0
+eta_cutoff = 0.0
+
+dynamic_temperature_min = 0.0
+dynamic_temperature_max = 0.0
+dynamic_temperature_exponent = 1.0
+
+seed = -1
+stop_sequences = []
