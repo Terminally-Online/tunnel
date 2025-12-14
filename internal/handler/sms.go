@@ -66,7 +66,7 @@ func (h *SMSHandler) processMessage(msg *sms.InboundMessage) {
 		if err != nil {
 			log.Printf("Failed to load session for %s: %v", msg.From, err)
 		} else {
-			prompt = session.BuildPrompt(body, h.model.CharacterDescription)
+			prompt = session.BuildPrompt(body, h.model.CharacterDescription, h.model.ContextSize, h.model.MaxTokens)
 		}
 	}
 
@@ -119,7 +119,7 @@ func (h *SMSHandler) processMessage(msg *sms.InboundMessage) {
 		session.AddTurn("user", body)
 		session.AddTurn("assistant", response)
 
-		if session.TurnCount >= h.memoryConfig.SummaryInterval {
+		if h.model.ContextSize > 0 && session.HistoryRatio(h.model.ContextSize, h.model.MaxTokens, h.model.CharacterDescription) >= h.memoryConfig.SummaryThreshold {
 			h.summarizeSession(session)
 		}
 

@@ -18,12 +18,12 @@ type Config struct {
 }
 
 type Memory struct {
-	Enabled           bool   `toml:"enabled"`
-	StoragePath       string `toml:"storage_path"`
-	SummaryInterval   int    `toml:"summary_interval"`
-	SummaryPrompt     string `toml:"summary_prompt"`
-	ProfileInterval   int    `toml:"profile_interval"`
-	ProfilePrompt     string `toml:"profile_prompt"`
+	Enabled          bool    `toml:"enabled"`
+	StoragePath      string  `toml:"storage_path"`
+	SummaryThreshold float64 `toml:"summary_threshold"`
+	SummaryPrompt    string  `toml:"summary_prompt"`
+	ProfileInterval  int     `toml:"profile_interval"`
+	ProfilePrompt    string  `toml:"profile_prompt"`
 	CharacterInterval int    `toml:"character_interval"`
 }
 
@@ -39,7 +39,8 @@ type Model struct {
 	APIKey               string `toml:"api_key"`
 	CharacterDescription string `toml:"character_description"`
 
-	MaxTokens   int     `toml:"max_tokens"`
+	ContextSize int `toml:"context_size"`
+	MaxTokens   int `toml:"max_tokens"`
 	Temperature float64 `toml:"temperature"`
 
 	TopP     float64 `toml:"top_p"`
@@ -117,9 +118,9 @@ func Load(path string) (*Config, error) {
 
 	if memorySection, ok := raw["memory"].(map[string]any); ok {
 		cfg.Memory = &Memory{
-			StoragePath:       "memory.db",
-			SummaryInterval:   10,
-			ProfileInterval:   25,
+			StoragePath:      "memory.db",
+			SummaryThreshold: 0.6,
+			ProfileInterval:  25,
 			CharacterInterval: 40,
 		}
 		if v, ok := memorySection["enabled"].(bool); ok {
@@ -128,8 +129,8 @@ func Load(path string) (*Config, error) {
 		if v, ok := memorySection["storage_path"].(string); ok {
 			cfg.Memory.StoragePath = v
 		}
-		if v, ok := memorySection["summary_interval"].(int64); ok {
-			cfg.Memory.SummaryInterval = int(v)
+		if v, ok := memorySection["summary_threshold"].(float64); ok {
+			cfg.Memory.SummaryThreshold = v
 		}
 		if v, ok := memorySection["summary_prompt"].(string); ok {
 			cfg.Memory.SummaryPrompt = v
@@ -164,6 +165,9 @@ func Load(path string) (*Config, error) {
 			model.CharacterDescription = v
 		}
 
+		if v, ok := section["context_size"].(int64); ok {
+			model.ContextSize = int(v)
+		}
 		if v, ok := section["max_tokens"].(int64); ok {
 			model.MaxTokens = int(v)
 		}

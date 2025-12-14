@@ -32,7 +32,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize memory store: %v", err)
 		}
-		log.Printf("Memory enabled, storing at %s (summarize every %d turns)", cfg.Memory.StoragePath, cfg.Memory.SummaryInterval)
+		log.Printf("Memory enabled, storing at %s (summarize at %.0f%% context)", cfg.Memory.StoragePath, cfg.Memory.SummaryThreshold*100)
 	}
 
 	mux := http.NewServeMux()

@@ -87,7 +87,7 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Failed to load session %s: %v", req.SessionID, err)
 		} else {
-			prompt = session.BuildPrompt(req.Prompt, model.CharacterDescription)
+			prompt = session.BuildPrompt(req.Prompt, model.CharacterDescription, model.ContextSize, model.MaxTokens)
 		}
 	}
 
@@ -141,7 +141,7 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		session.AddTurn("user", req.Prompt)
 		session.AddTurn("assistant", text)
 
-		if session.TurnCount >= h.memoryConfig.SummaryInterval {
+		if model.ContextSize > 0 && session.HistoryRatio(model.ContextSize, model.MaxTokens, model.CharacterDescription) >= h.memoryConfig.SummaryThreshold {
 			h.summarizeSession(session, client, model)
 		}
 
