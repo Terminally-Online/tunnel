@@ -8,6 +8,7 @@ import (
 	"github.com/terminally-online/tunnel/internal/config"
 	"github.com/terminally-online/tunnel/internal/handler"
 	"github.com/terminally-online/tunnel/internal/llm"
+	"github.com/terminally-online/tunnel/internal/memory"
 	"github.com/terminally-online/tunnel/internal/sms"
 )
 
@@ -25,9 +26,18 @@ func main() {
 		log.Printf("  - %s", name)
 	}
 
+	var memoryStore *memory.Store
+	if cfg.Memory != nil && cfg.Memory.Enabled {
+		memoryStore, err = memory.NewStore(cfg.Memory.StoragePath)
+		if err != nil {
+			log.Fatalf("Failed to initialize memory store: %v", err)
+		}
+		log.Printf("Memory enabled, storing at %s (summarize every %d turns)", cfg.Memory.StoragePath, cfg.Memory.SummaryInterval)
+	}
+
 	mux := http.NewServeMux()
 
-	mux.Handle("/generate", handler.NewGenerateHandler(cfg.Models))
+	mux.Handle("/generate", handler.NewGenerateHandler(cfg.Models, memoryStore, cfg.Memory))
 
 	if cfg.Twilio != nil {
 		model, ok := cfg.Models[cfg.Twilio.Model]
@@ -37,7 +47,7 @@ func main() {
 
 		smsClient := sms.NewClient(cfg.Twilio.AccountSID, cfg.Twilio.AuthToken, cfg.Twilio.FromNumber)
 		llmClient := llm.NewHTTPClient(model.URL, model.APIKey)
-		smsHandler := handler.NewSMSHandler(smsClient, llmClient, model)
+		smsHandler := handler.NewSMSHandler(smsClient, llmClient, model, memoryStore, cfg.Memory)
 
 		mux.Handle("/sms", smsHandler)
 		log.Printf("Twilio SMS enabled, routing to model %q", cfg.Twilio.Model)

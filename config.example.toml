@@ -6,6 +6,11 @@ auth_token = "${TWILIO_AUTH_TOKEN}"
 from_number = "${TWILIO_FROM_NUMBER}"
 model = "sms"
 
+[memory]
+enabled = true
+storage_path = "memory.db"
+summary_interval = 10
+
 [sms]
 url = "${SMS_MODEL_URL}"
 api_key = ""

@@ -13,7 +13,15 @@ var envPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 type Config struct {
 	Port   string            `toml:"port"`
 	Twilio *Twilio           `toml:"-"`
+	Memory *Memory           `toml:"-"`
 	Models map[string]*Model `toml:"-"`
+}
+
+type Memory struct {
+	Enabled         bool   `toml:"enabled"`
+	StoragePath     string `toml:"storage_path"`
+	SummaryInterval int    `toml:"summary_interval"`
+	SummaryPrompt   string `toml:"summary_prompt"`
 }
 
 type Twilio struct {
@@ -101,6 +109,26 @@ func Load(path string) (*Config, error) {
 			cfg.Twilio.Model = v
 		}
 		delete(raw, "twilio")
+	}
+
+	if memorySection, ok := raw["memory"].(map[string]any); ok {
+		cfg.Memory = &Memory{
+			StoragePath:     "memory.db",
+			SummaryInterval: 10,
+		}
+		if v, ok := memorySection["enabled"].(bool); ok {
+			cfg.Memory.Enabled = v
+		}
+		if v, ok := memorySection["storage_path"].(string); ok {
+			cfg.Memory.StoragePath = v
+		}
+		if v, ok := memorySection["summary_interval"].(int64); ok {
+			cfg.Memory.SummaryInterval = int(v)
+		}
+		if v, ok := memorySection["summary_prompt"].(string); ok {
+			cfg.Memory.SummaryPrompt = v
+		}
+		delete(raw, "memory")
 	}
 
 	for name, v := range raw {

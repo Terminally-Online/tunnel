@@ -2,6 +2,7 @@ tunnel
 
 config.toml
 .env
+*.db
 
 .idea/
 .vscode/

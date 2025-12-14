@@ -5,30 +5,37 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/terminally-online/tunnel/internal/config"
 	"github.com/terminally-online/tunnel/internal/llm"
+	"github.com/terminally-online/tunnel/internal/memory"
 )
 
 type GenerateHandler struct {
-	models  map[string]*config.Model
-	clients map[string]llm.Client
+	models       map[string]*config.Model
+	clients      map[string]llm.Client
+	memoryStore  *memory.Store
+	memoryConfig *config.Memory
 }
 
-func NewGenerateHandler(models map[string]*config.Model) *GenerateHandler {
+func NewGenerateHandler(models map[string]*config.Model, memoryStore *memory.Store, memoryConfig *config.Memory) *GenerateHandler {
 	clients := make(map[string]llm.Client)
 	for name, model := range models {
 		clients[name] = llm.NewHTTPClient(model.URL, model.APIKey)
 	}
 	return &GenerateHandler{
-		models:  models,
-		clients: clients,
+		models:       models,
+		clients:      clients,
+		memoryStore:  memoryStore,
+		memoryConfig: memoryConfig,
 	}
 }
 
 type generateRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
+	Model     string `json:"model"`
+	Prompt    string `json:"prompt"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 type generateResponse struct {
@@ -69,8 +76,22 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	client := h.clients[req.Model]
 
+	prompt := req.Prompt
+	var session *memory.Session
+
+	useMemory := req.SessionID != "" && h.memoryStore != nil && h.memoryConfig != nil && h.memoryConfig.Enabled
+	if useMemory {
+		var err error
+		session, err = h.memoryStore.Get(req.SessionID)
+		if err != nil {
+			log.Printf("Failed to load session %s: %v", req.SessionID, err)
+		} else {
+			prompt = session.BuildPrompt(req.Prompt)
+		}
+	}
+
 	params := llm.GenerateParams{
-		Prompt: req.Prompt,
+		Prompt: prompt,
 
 		MaxTokens:   model.MaxTokens,
 		Temperature: model.Temperature,
@@ -115,7 +136,40 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if session != nil {
+		session.AddTurn("user", req.Prompt)
+		session.AddTurn("assistant", text)
+
+		if session.TurnCount >= h.memoryConfig.SummaryInterval {
+			h.summarizeSession(session, client, model)
+		}
+
+		if err := h.memoryStore.Save(session); err != nil {
+			log.Printf("Failed to save session %s: %v", req.SessionID, err)
+		}
+	}
+
 	h.writeJSON(w, http.StatusOK, generateResponse{Text: text})
+}
+
+func (h *GenerateHandler) summarizeSession(session *memory.Session, client llm.Client, model *config.Model) {
+	prompt := memory.BuildSummarizationPrompt(session, h.memoryConfig.SummaryPrompt)
+
+	params := llm.GenerateParams{
+		Prompt:      prompt,
+		MaxTokens:   model.MaxTokens,
+		Temperature: 0.3,
+	}
+
+	summary, err := client.Generate(context.Background(), params)
+	if err != nil {
+		log.Printf("Failed to summarize session %s: %v", session.ID, err)
+		return
+	}
+
+	session.Summary = strings.TrimSpace(summary)
+	session.ClearHistory()
+	log.Printf("Summarized session %s", session.ID)
 }
 
 func (h *GenerateHandler) writeJSON(w http.ResponseWriter, status int, v any) {
