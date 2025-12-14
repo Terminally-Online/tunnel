@@ -10,10 +10,13 @@ model = "sms"
 enabled = true
 storage_path = "memory.db"
 summary_interval = 10
+profile_interval = 25
+character_interval = 40
 
 [sms]
 url = "${SMS_MODEL_URL}"
 api_key = ""
+character_description = ""
 
 max_tokens = 512
 temperature = 0.9

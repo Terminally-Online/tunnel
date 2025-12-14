@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/terminally-online/tunnel/internal/config"
 	"github.com/terminally-online/tunnel/internal/llm"
@@ -86,7 +87,7 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Failed to load session %s: %v", req.SessionID, err)
 		} else {
-			prompt = session.BuildPrompt(req.Prompt)
+			prompt = session.BuildPrompt(req.Prompt, model.CharacterDescription)
 		}
 	}
 
@@ -144,6 +145,14 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.summarizeSession(session, client, model)
 		}
 
+		if h.memoryConfig.ProfileInterval > 0 && session.TotalTurnCount > 0 && session.TotalTurnCount%h.memoryConfig.ProfileInterval == 0 {
+			h.extractProfile(session, client, model)
+		}
+
+		if h.shouldEvolveCharacter(session, model) {
+			h.evolveCharacter(session, client, model)
+		}
+
 		if err := h.memoryStore.Save(session); err != nil {
 			log.Printf("Failed to save session %s: %v", req.SessionID, err)
 		}
@@ -170,6 +179,64 @@ func (h *GenerateHandler) summarizeSession(session *memory.Session, client llm.C
 	session.Summary = strings.TrimSpace(summary)
 	session.ClearHistory()
 	log.Printf("Summarized session %s", session.ID)
+}
+
+func (h *GenerateHandler) extractProfile(session *memory.Session, client llm.Client, model *config.Model) {
+	prompt := memory.BuildProfileExtractionPrompt(session, h.memoryConfig.ProfilePrompt)
+
+	params := llm.GenerateParams{
+		Prompt:      prompt,
+		MaxTokens:   model.MaxTokens,
+		Temperature: 0.3,
+	}
+
+	profile, err := client.Generate(context.Background(), params)
+	if err != nil {
+		log.Printf("Failed to extract profile for session %s: %v", session.ID, err)
+		return
+	}
+
+	session.Profile = strings.TrimSpace(profile)
+	log.Printf("Extracted profile for session %s", session.ID)
+}
+
+func (h *GenerateHandler) shouldEvolveCharacter(session *memory.Session, model *config.Model) bool {
+	if model.CharacterDescription == "" {
+		return false
+	}
+	if h.memoryConfig.CharacterInterval <= 0 {
+		return false
+	}
+	if session.TotalTurnCount <= 0 {
+		return false
+	}
+	if session.TotalTurnCount%h.memoryConfig.CharacterInterval != 0 {
+		return false
+	}
+	if !session.CharacterUpdatedAt.IsZero() && time.Since(session.CharacterUpdatedAt) < 24*time.Hour {
+		return false
+	}
+	return true
+}
+
+func (h *GenerateHandler) evolveCharacter(session *memory.Session, client llm.Client, model *config.Model) {
+	prompt := memory.BuildCharacterEvolutionPrompt(session, model.CharacterDescription)
+
+	params := llm.GenerateParams{
+		Prompt:      prompt,
+		MaxTokens:   model.MaxTokens,
+		Temperature: 0.3,
+	}
+
+	deltas, err := client.Generate(context.Background(), params)
+	if err != nil {
+		log.Printf("Failed to evolve character for session %s: %v", session.ID, err)
+		return
+	}
+
+	session.CharacterDeltas = strings.TrimSpace(deltas)
+	session.CharacterUpdatedAt = time.Now()
+	log.Printf("Evolved character for session %s", session.ID)
 }
 
 func (h *GenerateHandler) writeJSON(w http.ResponseWriter, status int, v any) {

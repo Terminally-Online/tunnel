@@ -18,10 +18,13 @@ type Config struct {
 }
 
 type Memory struct {
-	Enabled         bool   `toml:"enabled"`
-	StoragePath     string `toml:"storage_path"`
-	SummaryInterval int    `toml:"summary_interval"`
-	SummaryPrompt   string `toml:"summary_prompt"`
+	Enabled           bool   `toml:"enabled"`
+	StoragePath       string `toml:"storage_path"`
+	SummaryInterval   int    `toml:"summary_interval"`
+	SummaryPrompt     string `toml:"summary_prompt"`
+	ProfileInterval   int    `toml:"profile_interval"`
+	ProfilePrompt     string `toml:"profile_prompt"`
+	CharacterInterval int    `toml:"character_interval"`
 }
 
 type Twilio struct {
@@ -32,8 +35,9 @@ type Twilio struct {
 }
 
 type Model struct {
-	URL    string `toml:"url"`
-	APIKey string `toml:"api_key"`
+	URL                  string `toml:"url"`
+	APIKey               string `toml:"api_key"`
+	CharacterDescription string `toml:"character_description"`
 
 	MaxTokens   int     `toml:"max_tokens"`
 	Temperature float64 `toml:"temperature"`
@@ -113,8 +117,10 @@ func Load(path string) (*Config, error) {
 
 	if memorySection, ok := raw["memory"].(map[string]any); ok {
 		cfg.Memory = &Memory{
-			StoragePath:     "memory.db",
-			SummaryInterval: 10,
+			StoragePath:       "memory.db",
+			SummaryInterval:   10,
+			ProfileInterval:   25,
+			CharacterInterval: 40,
 		}
 		if v, ok := memorySection["enabled"].(bool); ok {
 			cfg.Memory.Enabled = v
@@ -127,6 +133,15 @@ func Load(path string) (*Config, error) {
 		}
 		if v, ok := memorySection["summary_prompt"].(string); ok {
 			cfg.Memory.SummaryPrompt = v
+		}
+		if v, ok := memorySection["profile_interval"].(int64); ok {
+			cfg.Memory.ProfileInterval = int(v)
+		}
+		if v, ok := memorySection["profile_prompt"].(string); ok {
+			cfg.Memory.ProfilePrompt = v
+		}
+		if v, ok := memorySection["character_interval"].(int64); ok {
+			cfg.Memory.CharacterInterval = int(v)
 		}
 		delete(raw, "memory")
 	}
@@ -144,6 +159,9 @@ func Load(path string) (*Config, error) {
 		}
 		if apiKey, ok := section["api_key"].(string); ok {
 			model.APIKey = apiKey
+		}
+		if v, ok := section["character_description"].(string); ok {
+			model.CharacterDescription = v
 		}
 
 		if v, ok := section["max_tokens"].(int64); ok {

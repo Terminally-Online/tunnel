@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/terminally-online/tunnel/internal/config"
 	"github.com/terminally-online/tunnel/internal/llm"
@@ -65,7 +66,7 @@ func (h *SMSHandler) processMessage(msg *sms.InboundMessage) {
 		if err != nil {
 			log.Printf("Failed to load session for %s: %v", msg.From, err)
 		} else {
-			prompt = session.BuildPrompt(body)
+			prompt = session.BuildPrompt(body, h.model.CharacterDescription)
 		}
 	}
 
@@ -122,6 +123,14 @@ func (h *SMSHandler) processMessage(msg *sms.InboundMessage) {
 			h.summarizeSession(session)
 		}
 
+		if h.memoryConfig.ProfileInterval > 0 && session.TotalTurnCount > 0 && session.TotalTurnCount%h.memoryConfig.ProfileInterval == 0 {
+			h.extractProfile(session)
+		}
+
+		if h.shouldEvolveCharacter(session) {
+			h.evolveCharacter(session)
+		}
+
 		if err := h.memoryStore.Save(session); err != nil {
 			log.Printf("Failed to save session for %s: %v", msg.From, err)
 		}
@@ -150,4 +159,62 @@ func (h *SMSHandler) summarizeSession(session *memory.Session) {
 	session.Summary = strings.TrimSpace(summary)
 	session.ClearHistory()
 	log.Printf("Summarized session %s", session.ID)
+}
+
+func (h *SMSHandler) extractProfile(session *memory.Session) {
+	prompt := memory.BuildProfileExtractionPrompt(session, h.memoryConfig.ProfilePrompt)
+
+	params := llm.GenerateParams{
+		Prompt:      prompt,
+		MaxTokens:   h.model.MaxTokens,
+		Temperature: 0.3,
+	}
+
+	profile, err := h.llmClient.Generate(context.Background(), params)
+	if err != nil {
+		log.Printf("Failed to extract profile for session %s: %v", session.ID, err)
+		return
+	}
+
+	session.Profile = strings.TrimSpace(profile)
+	log.Printf("Extracted profile for session %s", session.ID)
+}
+
+func (h *SMSHandler) shouldEvolveCharacter(session *memory.Session) bool {
+	if h.model.CharacterDescription == "" {
+		return false
+	}
+	if h.memoryConfig.CharacterInterval <= 0 {
+		return false
+	}
+	if session.TotalTurnCount <= 0 {
+		return false
+	}
+	if session.TotalTurnCount%h.memoryConfig.CharacterInterval != 0 {
+		return false
+	}
+	if !session.CharacterUpdatedAt.IsZero() && time.Since(session.CharacterUpdatedAt) < 24*time.Hour {
+		return false
+	}
+	return true
+}
+
+func (h *SMSHandler) evolveCharacter(session *memory.Session) {
+	prompt := memory.BuildCharacterEvolutionPrompt(session, h.model.CharacterDescription)
+
+	params := llm.GenerateParams{
+		Prompt:      prompt,
+		MaxTokens:   h.model.MaxTokens,
+		Temperature: 0.3,
+	}
+
+	deltas, err := h.llmClient.Generate(context.Background(), params)
+	if err != nil {
+		log.Printf("Failed to evolve character for session %s: %v", session.ID, err)
+		return
+	}
+
+	session.CharacterDeltas = strings.TrimSpace(deltas)
+	session.CharacterUpdatedAt = time.Now()
+	log.Printf("Evolved character for session %s", session.ID)
 }

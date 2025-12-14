@@ -11,16 +11,21 @@ type Turn struct {
 }
 
 type Session struct {
-	ID        string    `json:"id"`
-	Summary   string    `json:"summary"`
-	TurnCount int       `json:"turn_count"`
-	History   []Turn    `json:"history"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	Summary            string    `json:"summary"`
+	Profile            string    `json:"profile"`
+	CharacterDeltas    string    `json:"character_deltas"`
+	TurnCount          int       `json:"turn_count"`
+	TotalTurnCount     int       `json:"total_turn_count"`
+	History            []Turn    `json:"history"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	CharacterUpdatedAt time.Time `json:"character_updated_at"`
 }
 
 func (s *Session) AddTurn(role, content string) {
 	s.History = append(s.History, Turn{Role: role, Content: content})
 	s.TurnCount++
+	s.TotalTurnCount++
 	s.UpdatedAt = time.Now()
 }
 
@@ -48,8 +53,26 @@ func (s *Session) FormatHistory() string {
 	return strings.TrimSpace(sb.String())
 }
 
-func (s *Session) BuildPrompt(currentMessage string) string {
+func (s *Session) BuildPrompt(currentMessage string, characterDescription string) string {
 	var sb strings.Builder
+
+	if characterDescription != "" {
+		sb.WriteString("[Character]\n")
+		sb.WriteString(characterDescription)
+		sb.WriteString("\n\n")
+	}
+
+	if s.CharacterDeltas != "" {
+		sb.WriteString("[Character Adaptations for This User]\n")
+		sb.WriteString(s.CharacterDeltas)
+		sb.WriteString("\n\n")
+	}
+
+	if s.Profile != "" {
+		sb.WriteString("[User Profile]\n")
+		sb.WriteString(s.Profile)
+		sb.WriteString("\n\n")
+	}
 
 	if s.Summary != "" {
 		sb.WriteString("[Summary of prior conversation]\n")
